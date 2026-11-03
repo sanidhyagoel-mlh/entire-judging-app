@@ -16,8 +16,8 @@ npm install
 npm run dev
 ```
 
-6. When the terminal says the app is ready, open [http://localhost:3000](http://localhost:3000).
-7. Leave that terminal window open while you use the app. Closing it stops the app.
+5. When the terminal says the app is ready, open [http://localhost:3000](http://localhost:3000).
+6. Leave that terminal window open while you use the app. Closing it stops the app.
 
 ## Install Entire
 
