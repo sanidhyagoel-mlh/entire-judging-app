@@ -25,6 +25,10 @@ npm run dev
 
 On the setup screen, click Install. That downloads the Entire CLI and the judge plugin onto this computer. When it finishes, the screen says Entire judge is ready.
 
+## GitHub repositories
+
+No GitHub sign-in is needed. The app uses Git to check whether each submitted repository can be read anonymously before adding it to Entire judge. A repository that cannot be read is skipped; a temporary network failure stops the check so it can be retried.
+
 ## Judge the projects
 
 Upload a spreadsheet saved as CSV. One row is one project. The file has one column, `repo_url`. Each cell must be a public GitHub link. Private repositories are not judged.

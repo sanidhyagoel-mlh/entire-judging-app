@@ -4,14 +4,11 @@ import React, { useRef, useState } from "react";
 import { CSVProjectRow, RankReport } from "@/lib/types";
 import { parseProjectsCSV } from "@/lib/csv";
 import {
-  Calendar,
+  CheckCircle2,
   Download,
-  FileSpreadsheet,
   FileUp,
-  FolderGit2,
   Loader2,
   Play,
-  Terminal,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -25,7 +22,13 @@ interface HackathonSetupPanelProps {
   setProjects: (rows: CSVProjectRow[]) => void;
   localCliAvailable: boolean;
   isEvaluating: boolean;
+  runPhase: string;
+  runStage: string;
+  runStatus: "idle" | "running" | "complete" | "error";
+  runLogs: string[];
+  runProgress: { checked: number; total: number };
   onRunEvaluation: () => void;
+  onViewResults: () => void;
   onInstalled: () => void;
   onImportBoardJson: (board: RankReport) => void;
 }
@@ -39,7 +42,13 @@ export function HackathonSetupPanel({
   setProjects,
   localCliAvailable,
   isEvaluating,
+  runPhase,
+  runStage,
+  runStatus,
+  runLogs,
+  runProgress,
   onRunEvaluation,
+  onViewResults,
   onInstalled,
   onImportBoardJson,
 }: HackathonSetupPanelProps) {
@@ -107,6 +116,7 @@ export function HackathonSetupPanel({
     }
   };
 
+
   const toDatetimeLocal = (rfc3339: string): string => {
     const d = new Date(rfc3339);
     if (!rfc3339 || isNaN(d.getTime())) return "";
@@ -131,66 +141,77 @@ export function HackathonSetupPanel({
     hackathonName.trim().length > 0 &&
     hackathonStart.trim().length > 0;
 
+  const visibleLogs = runLogs.slice(-16);
+  const progressPct =
+    runStatus === "complete"
+      ? 100
+      : runStage === "ranking"
+        ? 35
+        : runProgress.total
+          ? Math.max(5, Math.min(100, (runProgress.checked / runProgress.total) * 100))
+          : 5;
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/80 p-6 shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300 mb-1">
-              <Terminal className="h-3 w-3" /> Step 1 · Install
-            </span>
-            <h2 className="text-lg font-bold text-white">Entire judge</h2>
-            <p className="text-xs text-zinc-400 mt-1">
-              {localCliAvailable
-                ? "Entire judge is ready."
-                : "Installs the Entire CLI and the judge plugin on this computer."}
-            </p>
+    <div className="flex flex-col gap-5">
+      <section className="card">
+        <div className="card-head">
+          <div className="flex items-center gap-3">
+            <span className={`dot ${localCliAvailable ? "ok" : ""}`} />
+            <div>
+              <h2 className="card-title">Entire judge</h2>
+              <p className="card-sub">
+                {localCliAvailable
+                  ? "Installed and ready on this computer."
+                  : "Installs the Entire CLI and the judge plugin on this computer."}
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={handleInstall}
             disabled={installing || localCliAvailable}
-            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+            className="btn"
           >
             {installing ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Installing...
+                <Loader2 className="animate-spin" /> Installing…
               </>
             ) : localCliAvailable ? (
-              "Installed"
+              <>
+                <CheckCircle2 style={{ color: "var(--good)" }} /> Installed
+              </>
             ) : (
               "Install"
             )}
           </button>
         </div>
-        {installError && (
-          <p className="mt-3 text-xs text-rose-300 whitespace-pre-wrap">
-            {installError}
-          </p>
-        )}
-        {installLogs.length > 0 && (
-          <pre className="mt-3 max-h-40 overflow-auto rounded-xl bg-zinc-950 border border-zinc-800 p-3 text-[11px] text-zinc-400 whitespace-pre-wrap">
-            {installLogs.join("\n")}
-          </pre>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-7 rounded-2xl border border-zinc-800/90 bg-zinc-900/80 p-6 shadow-xl">
-          <div className="mb-4">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 px-2.5 py-0.5 text-[11px] font-medium text-indigo-300 mb-1">
-              <Calendar className="h-3 w-3" /> Step 2 · Hackathon
-            </span>
-            <h2 className="text-lg font-bold text-white">Hackathon details</h2>
+        {(installError || installLogs.length > 0) && (
+          <div className="card-body flex flex-col gap-3">
+            {installError && (
+              <div className="alert alert-bad">
+                <div className="whitespace-pre-wrap text-[12.5px]">{installError}</div>
+              </div>
+            )}
+            {installLogs.length > 0 && (
+              <code className="code" style={{ maxHeight: 160 }}>
+                {installLogs.join("\n")}
+              </code>
+            )}
           </div>
+        )}
+      </section>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        <section className="card lg:col-span-3">
+          <div className="card-head">
             <div>
-              <label
-                htmlFor="hackathon-name"
-                className="block text-xs font-medium text-zinc-300 mb-1.5"
-              >
+              <h2 className="card-title">Hackathon details</h2>
+              <p className="card-sub">Used to place each project on the event timeline.</p>
+            </div>
+          </div>
+          <div className="card-body grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="hackathon-name" className="field-label">
                 Hackathon name
               </label>
               <input
@@ -198,16 +219,12 @@ export function HackathonSetupPanel({
                 type="text"
                 value={hackathonName}
                 onChange={(e) => setHackathonName(e.target.value)}
-                placeholder="Hackathon name"
-                className="w-full rounded-xl border border-zinc-700/80 bg-zinc-950 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                placeholder="e.g. hackCBS 9.0"
+                className="input"
               />
             </div>
-
             <div>
-              <label
-                htmlFor="hackathon-start"
-                className="block text-xs font-medium text-zinc-300 mb-1.5"
-              >
+              <label htmlFor="hackathon-start" className="field-label">
                 Start date and time (UTC)
               </label>
               <input
@@ -215,33 +232,23 @@ export function HackathonSetupPanel({
                 type="datetime-local"
                 value={toDatetimeLocal(hackathonStart)}
                 onChange={(e) => handleDatetimeChange(e.target.value)}
-                className="w-full rounded-xl border border-zinc-700/80 bg-zinc-950 px-3.5 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                className="input"
               />
             </div>
           </div>
-        </div>
+        </section>
 
-        <div className="lg:col-span-5 rounded-2xl border border-zinc-800/90 bg-zinc-900/80 p-6 shadow-xl flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300 mb-1">
-                  <FileSpreadsheet className="h-3 w-3" /> Step 3 · Projects
-                </span>
-                <h2 className="text-lg font-bold text-white">
-                  Upload projects CSV
-                </h2>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleDownloadTemplateCSV}
-                className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
-              >
-                <Download className="h-3.5 w-3.5" /> Blank template
-              </button>
+        <section className="card lg:col-span-2">
+          <div className="card-head">
+            <div>
+              <h2 className="card-title">Projects</h2>
+              <p className="card-sub">One public GitHub link per row.</p>
             </div>
-
+            <button type="button" onClick={handleDownloadTemplateCSV} className="btn btn-sm">
+              <Download /> Template
+            </button>
+          </div>
+          <div className="card-body flex flex-col gap-3">
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -251,16 +258,10 @@ export function HackathonSetupPanel({
               onDrop={(e) => {
                 e.preventDefault();
                 setDragActive(false);
-                if (e.dataTransfer.files?.[0]) {
-                  handleFileUpload(e.dataTransfer.files[0]);
-                }
+                if (e.dataTransfer.files?.[0]) handleFileUpload(e.dataTransfer.files[0]);
               }}
               onClick={() => csvInputRef.current?.click()}
-              className={`cursor-pointer rounded-2xl border-2 border-dashed p-5 text-center transition-all ${
-                dragActive
-                  ? "border-indigo-400 bg-indigo-950/30"
-                  : "border-zinc-700/80 bg-zinc-950/60 hover:border-indigo-500/60"
-              }`}
+              className={`dropzone ${dragActive ? "drag" : ""}`}
             >
               <input
                 ref={csvInputRef}
@@ -271,18 +272,10 @@ export function HackathonSetupPanel({
                   if (e.target.files?.[0]) handleFileUpload(e.target.files[0]);
                 }}
               />
-              <Upload className="mx-auto h-7 w-7 text-indigo-400 mb-2" />
-              <div className="text-sm font-medium text-zinc-200">
-                Drop a CSV here or click to browse
-              </div>
-              <p className="text-xs text-zinc-400 mt-1">
-                One column, repo_url. Each row is a public GitHub link. Private
-                repositories are not judged.
-              </p>
+              <Upload />
+              <strong>Drop a CSV or click to browse</strong>
+              <span>Column: repo_url · private repositories are skipped</span>
             </div>
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-zinc-800/80 flex justify-end">
             <input
               ref={boardInputRef}
               type="file"
@@ -295,84 +288,133 @@ export function HackathonSetupPanel({
             <button
               type="button"
               onClick={() => boardInputRef.current?.click()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-700"
+              className="btn btn-ghost btn-sm self-start"
             >
-              <FileUp className="h-3.5 w-3.5 text-cyan-400" />
-              Import `board.json`
+              <FileUp /> Import existing board.json
             </button>
           </div>
-        </div>
+        </section>
       </div>
 
-      <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/80 p-6 shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+      <section className="card">
+        <div className="card-head">
           <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-0.5 text-[11px] font-medium text-cyan-300 mb-1">
-              <FolderGit2 className="h-3 w-3" /> Projects ({projects.length})
-            </span>
-            <h3 className="text-base font-bold text-white">Repositories</h3>
+            <h2 className="card-title">Repositories</h2>
+            <p className="card-sub">
+              {projects.length === 0
+                ? "No repositories added yet."
+                : `${projects.length} ${projects.length === 1 ? "repository" : "repositories"} queued for this run.`}
+            </p>
           </div>
-
           <button
             type="button"
             disabled={!canRun}
             onClick={onRunEvaluation}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-950/50 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 transition-all"
+            className={`btn btn-primary ${isEvaluating ? "is-running" : ""}`}
           >
             {isEvaluating ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Running Entire judge...
+                <Loader2 className="animate-spin" /> Running…
               </>
             ) : (
               <>
-                <Play className="h-4 w-4 fill-current" />
-                Run evaluation ({projects.length})
+                <Play /> Run evaluation
               </>
             )}
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-zinc-800">
-          <table className="w-full text-left border-collapse text-xs">
+        {runStatus !== "idle" && (
+          <div className="run-panel" role="status" aria-live="polite">
+            <div className="run-top">
+              <span
+                className={`dot ${
+                  isEvaluating ? "live" : runStatus === "error" ? "bad" : "ok"
+                }`}
+              />
+              {runStatus === "complete"
+                ? "Evaluation complete"
+                : runStatus === "error"
+                  ? "Evaluation stopped"
+                  : "Evaluating"}
+              {runProgress.total > 0 && runStage !== "ranking" && (
+                <span className="run-count">
+                  {runProgress.checked}/{runProgress.total}
+                </span>
+              )}
+            </div>
+            <p className="run-current">{runPhase}</p>
+            <div
+              className={`run-track ${
+                isEvaluating && runStage === "ranking" ? "indeterminate" : ""
+              }`}
+            >
+              <div className="run-fill" style={{ width: `${progressPct}%` }} />
+            </div>
+            <div className="run-log">
+              {visibleLogs.map((log, index) => (
+                <div className="run-line" key={`${index}-${log}`}>
+                  <i className={index === visibleLogs.length - 1 && isEvaluating ? "active" : ""}>
+                    {index === visibleLogs.length - 1 && isEvaluating ? "›" : "✓"}
+                  </i>
+                  <span>{log}</span>
+                </div>
+              ))}
+            </div>
+            {runStatus === "complete" && (
+              <button type="button" className="btn btn-sm mt-4" onClick={onViewResults}>
+                View assessments
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="table-wrap">
+          <table className="table">
             <thead>
-              <tr className="border-b border-zinc-800 bg-zinc-950/80 text-zinc-400">
-                <th className="py-2.5 px-3">#</th>
-                <th className="py-2.5 px-3">GitHub repository</th>
-                <th className="py-2.5 px-3 text-right">Remove</th>
+              <tr>
+                <th style={{ width: 56 }}>#</th>
+                <th>GitHub repository</th>
+                <th className="r" style={{ width: 80 }}>
+                  <span className="sr-only">Remove</span>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/60">
+            <tbody>
               {projects.map((p, idx) => (
-                <tr key={p.id} className="hover:bg-zinc-800/40">
-                  <td className="py-2 px-3 font-mono text-zinc-500">
+                <tr key={p.id}>
+                  <td className="num" style={{ color: "var(--text-3)" }}>
                     {idx + 1}
                   </td>
-                  <td className="py-2 px-3 font-mono text-zinc-300">
+                  <td className="num" style={{ color: "var(--text)" }}>
                     {p.repoUrl}
                   </td>
-                  <td className="py-2 px-3 text-right">
+                  <td className="r">
                     <button
                       type="button"
                       onClick={() => handleRemoveProject(p.id)}
-                      className="text-zinc-500 hover:text-rose-400 p-1"
+                      className="icon-btn"
+                      aria-label={`Remove ${p.repoUrl}`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 size={14} />
                     </button>
                   </td>
                 </tr>
               ))}
               {projects.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-zinc-500 text-xs">
-                    Upload a CSV of GitHub repository links.
+                  <td
+                    colSpan={3}
+                    style={{ padding: "36px 14px", textAlign: "center", color: "var(--text-3)" }}
+                  >
+                    Upload a CSV of GitHub repository links to get started.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

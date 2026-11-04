@@ -132,7 +132,7 @@ export async function POST() {
       { status: 400 }
     );
   }
-  if (process.platform !== "darwin" && process.platform !== "linux") {
+  if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
     return NextResponse.json(
       {
         error:
@@ -144,6 +144,28 @@ export async function POST() {
 
   try {
     let env = commandEnv();
+
+    try {
+      await run("git-lfs", ["version"], env, 10000);
+      logs.push("Git LFS is installed.");
+    } catch {
+      logs.push("Installing Git LFS.");
+      const brew = process.platform === "darwin" ? ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"].find((candidate) => fs.existsSync(candidate)) : undefined;
+      if (brew) {
+        await run(brew, ["install", "git-lfs"], env, 300000);
+      } else if (process.platform === "linux") {
+        const manager = await run("sh", ["-lc", "command -v apt-get || command -v dnf || command -v yum || command -v pacman"], env, 10000).then(({ stdout }) => stdout.trim().split("\n").pop() || "").catch(() => "");
+        if (!manager) throw new Error("Install Git LFS with your Linux package manager, then click Install again: https://git-lfs.com/");
+        const args = manager.endsWith("apt-get") ? ["apt-get", "install", "-y", "git-lfs"] : manager.endsWith("dnf") ? ["dnf", "install", "-y", "git-lfs"] : manager.endsWith("yum") ? ["yum", "install", "-y", "git-lfs"] : ["pacman", "-S", "--noconfirm", "git-lfs"];
+        await run("sudo", args, env, 300000);
+      } else if (process.platform === "win32") {
+        throw new Error("Install Git LFS from https://git-lfs.com/ (or run winget install GitHub.GitLFS), then click Install again.");
+      } else {
+        throw new Error("Install Git LFS from https://git-lfs.com/ and click Install again.");
+      }
+      await run("git-lfs", ["install"], env, 30000);
+      logs.push("Git LFS is ready.");
+    }
 
     try {
       await run("git", ["--version"], env, 10000);
