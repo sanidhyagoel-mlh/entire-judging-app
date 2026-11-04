@@ -4,11 +4,13 @@ This app runs on your computer. It sends your project list to the Entire judge p
 
 Setup your pre-requisites, start up the app and follow the setup instructions on screen.
 
+Clone this repository before continuing.
+
 ## Start the app
 
 1. Install Node.js 18 or newer, the LTS version from [https://nodejs.org](https://nodejs.org).
 2. Install Git if you do not already have it.
-3. Open this folder inside of VS code or your IDE of choice. 
+3. Open this folder inside of VS code or your IDE of choice.
 4. Run these commands, one at a time:
 
 ```bash
@@ -16,8 +18,8 @@ npm install
 npm run dev
 ```
 
-6. When the terminal says the app is ready, open [http://localhost:3000](http://localhost:3000).
-7. Leave that terminal window open while you use the app. Closing it stops the app.
+5. When the terminal says the app is ready, open [http://localhost:3000](http://localhost:3000).
+6. Leave that terminal window open while you use the app. Closing it stops the app.
 
 ## Install Entire
 
