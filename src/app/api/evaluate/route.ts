@@ -4,7 +4,8 @@ import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import { CSVProjectRow, RankReport } from "@/lib/types";
-import { partitionPublicProjects } from "@/lib/public-repos";
+import { partitionPublicProjects, excludedReport } from "@/lib/public-repos";
+import { normalizeRepoIdentifier } from "@/lib/csv";
 import { commandEnv, resolveEntireBinary } from "@/lib/entire-bin";
 
 export const runtime = "nodejs";
@@ -62,11 +63,12 @@ export async function POST(req: NextRequest) {
           const logs: string[] = [];
           try {
       send({ type: "phase", phase: "github", message: `Checking ${projects.length} repositories with GitHub…` });
-      const { publicProjects, excluded } = await partitionPublicProjects(projects, (checked, total, repoUrl, isPublic) => {
-        const message = `GitHub ${checked}/${total}: ${repoUrl} — ${isPublic ? "public" : "not public / unavailable"}`;
+      const { publicProjects, excluded } = await partitionPublicProjects(projects, (checked, total, repoUrl, result) => {
+        const label = result.status === "public" ? "public" : result.status === "not_public" ? "not public" : "could not verify, will try cloning anyway";
+        const message = `GitHub ${checked}/${total}: ${repoUrl} — ${label} (${result.detail})`;
         logs.push(message); send({ type: "progress", phase: "github", checked, total, message });
       });
-      for (const item of excluded) logs.push(`[Skip] ${item.submission_id} is not publicly accessible on GitHub`);
+      for (const item of excluded) logs.push(`[Skip] ${item.submission_id} was excluded: ${item.reason}`);
       send({ type: "phase", phase: "adding", message: `GitHub check complete: ${publicProjects.length} eligible, ${excluded.length} skipped. Preparing repositories…` });
       // `entire judge rank <dir>` scores EVERY repo inside <dir>. Each run gets its
       // own folder so repos cloned by earlier runs are never ranked again.
@@ -86,25 +88,40 @@ export async function POST(req: NextRequest) {
       const env = commandEnv();
       env.PATH = `${path.dirname(entireBin)}:${env.PATH || ""}`;
 
+      // One bad repo must not abort the whole run: retry once, then record it
+      // as excluded with the real error from `entire judge add`.
       let added = 0;
+      let attempted = 0;
       for (const proj of publicProjects) {
-        send({ type: "progress", phase: "adding", checked: added, total: publicProjects.length, message: `Adding ${added + 1}/${publicProjects.length}: ${proj.repoUrl}` });
-        await execFileAsync(
-          entireBin,
-          [
-            "judge",
-            "add",
-            proj.repoUrl,
-            "--dir",
-            submissionsDir,
-            "--entire-binary",
-            entireBin,
-          ],
-          { env, timeout: 180000 }
-        );
+        attempted++;
+        send({ type: "progress", phase: "adding", checked: attempted - 1, total: publicProjects.length, message: `Adding ${attempted}/${publicProjects.length}: ${proj.repoUrl}` });
+        let failure = "";
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            await execFileAsync(
+              entireBin,
+              ["judge", "add", proj.repoUrl, "--dir", submissionsDir, "--entire-binary", entireBin],
+              { env, timeout: 300000 }
+            );
+            failure = "";
+            break;
+          } catch (error) {
+            const e = error as { stderr?: string; killed?: boolean; message?: string };
+            failure = e.killed ? "timed out while cloning" : String(e.stderr || e.message || error).trim().split("\n").slice(-3).join(" ");
+            logs.push(`[Retry ${attempt}/2] ${proj.repoUrl}: ${failure}`);
+            send({ type: "log", phase: "adding", message: `Add failed for ${proj.repoUrl} (attempt ${attempt}/2): ${failure}` });
+          }
+        }
+        if (failure) {
+          const norm = normalizeRepoIdentifier(proj.repoUrl);
+          const reason = `could not be cloned by Entire judge: ${failure}`;
+          excluded.push({ submission_id: norm.submissionId || proj.repoUrl, brain_path: "", reason, report: excludedReport(proj, norm, reason) });
+          logs.push(`[Skip] ${proj.repoUrl} ${reason}`);
+          continue;
+        }
         added++;
         logs.push(`Added ${added}/${publicProjects.length}: ${proj.repoUrl}`);
-        send({ type: "progress", phase: "adding", checked: added, total: publicProjects.length, message: `Added ${added}/${publicProjects.length}: ${proj.repoUrl}` });
+        send({ type: "progress", phase: "adding", checked: attempted, total: publicProjects.length, message: `Added ${proj.repoUrl}` });
       }
 
       const rankArgs = [

@@ -4,13 +4,35 @@ import { CSVProjectRow, EnrichedSubmission, LensResult, RankReport } from "./typ
  * Normalizes a GitHub URL or repo string into `gh/<owner>/<repo>`
  * and extracts `<owner>/<repo>` and full GitHub URL.
  */
+const GITHUB_REPO_RE = /(?:https?:\/\/)?(?:www\.)?github\.com[/:]([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)\/([A-Za-z0-9._-]+)/gi;
+
+// A single CSV cell may hold several links ("url1, url2", "url1 and url2",
+// links with trailing text). Pull out every distinct GitHub owner/repo.
+export function extractGitHubRepos(input: string): string[] {
+  const seen = new Set<string>();
+  const repos: string[] = [];
+  for (const m of input.matchAll(GITHUB_REPO_RE)) {
+    const owner = m[1];
+    const repo = m[2].replace(/\.git$/i, "").replace(/\.+$/, "");
+    if (!repo) continue;
+    const key = `${owner}/${repo}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    repos.push(`${owner}/${repo}`);
+  }
+  return repos;
+}
+
 export function normalizeRepoIdentifier(input: string): {
   submissionId: string;
   ownerRepo: string;
   repoUrl: string;
   defaultProjectName: string;
 } {
-  const clean = input.trim().replace(/\/+$/, "").replace(/\.git$/i, "");
+  const embedded = extractGitHubRepos(input)[0];
+  const clean = (embedded ? `https://github.com/${embedded}` : input.trim())
+    .replace(/\/+$/, "")
+    .replace(/\.git$/i, "");
   if (!clean) {
     return {
       submissionId: "",
@@ -255,13 +277,18 @@ export function parseProjectsCSV(csvText: string): {
     const rawUrl = (row[urlCol] || "").trim();
     if (!rawUrl) return;
 
-    const { submissionId, repoUrl, defaultProjectName } =
-      normalizeRepoIdentifier(rawUrl);
-
     const rawRow: Record<string, string> = {};
     headers.forEach((h, i) => {
       rawRow[h] = row[i] || "";
     });
+
+    // One project per distinct repo found in the cell.
+    const found = extractGitHubRepos(rawUrl);
+    const repoRefs = found.length > 0 ? found : [rawUrl];
+
+    repoRefs.forEach((ref, refIdx) => {
+    const { submissionId, repoUrl, defaultProjectName } =
+      normalizeRepoIdentifier(ref);
 
     const projectName =
       projectCol !== -1 && row[projectCol]?.trim()
@@ -269,7 +296,7 @@ export function parseProjectsCSV(csvText: string): {
         : defaultProjectName;
 
     projects.push({
-      id: `${submissionId.toLowerCase()}-${index}`,
+      id: `${submissionId.toLowerCase()}-${index}-${refIdx}`,
       repoUrl,
       submissionId,
       projectName,
@@ -279,6 +306,7 @@ export function parseProjectsCSV(csvText: string): {
       description: descCol !== -1 ? row[descCol]?.trim() : undefined,
       demoUrl: demoCol !== -1 ? row[demoCol]?.trim() : undefined,
       rawRow,
+    });
     });
   });
 

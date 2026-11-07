@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { CSVProjectRow, RankReport } from "@/lib/types";
 import { parseProjectsCSV } from "@/lib/csv";
 import {
@@ -141,7 +141,19 @@ export function HackathonSetupPanel({
     hackathonName.trim().length > 0 &&
     hackathonStart.trim().length > 0;
 
-  const visibleLogs = runLogs.slice(-16);
+  // Keep every log line. Follow the newest line only while the user is already
+  // at the bottom, so scrolling up to read earlier steps is never interrupted.
+  const logRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
+  const handleLogScroll = () => {
+    const el = logRef.current;
+    if (el) stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  };
+  useEffect(() => {
+    const el = logRef.current;
+    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
+  }, [runLogs]);
+  const visibleLogs = runLogs;
   const progressPct =
     runStatus === "complete"
       ? 100
@@ -351,7 +363,7 @@ export function HackathonSetupPanel({
             >
               <div className="run-fill" style={{ width: `${progressPct}%` }} />
             </div>
-            <div className="run-log">
+            <div className="run-log" ref={logRef} onScroll={handleLogScroll}>
               {visibleLogs.map((log, index) => (
                 <div className="run-line" key={`${index}-${log}`}>
                   <i className={index === visibleLogs.length - 1 && isEvaluating ? "active" : ""}>
